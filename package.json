@@ -2,11 +2,12 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev --turbopack",
+    "dev": "NODE_OPTIONS='--dns-result-order=ipv4first' next dev --turbopack",
     "start": "next start"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@neondatabase/serverless": "^1.0.2",
     "@tailwindcss/forms": "^0.5.10",
     "autoprefixer": "10.4.20",
     "bcryptjs": "^3.0.3",

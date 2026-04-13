@@ -1,218 +1,183 @@
-import postgres from 'postgres';
 import {
   CustomerField,
-  CustomersTableType,
   InvoiceForm,
   InvoicesTable,
-  LatestInvoiceRaw,
+  LatestInvoice,
   Revenue,
 } from './definitions';
 import { formatCurrency } from './utils';
 
-const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
+// ---------------------------------------------------------------------------
+// Static data – replaces the database while you're learning locally
+// ---------------------------------------------------------------------------
 
-export async function fetchRevenue() {
-  try {
-    // Artificially delay a response for demo purposes.
-    // Don't do this in production :)
+const revenue: Revenue[] = [
+  { month: 'Jan', revenue: 2000 },
+  { month: 'Feb', revenue: 1800 },
+  { month: 'Mar', revenue: 2200 },
+  { month: 'Apr', revenue: 2500 },
+  { month: 'May', revenue: 2300 },
+  { month: 'Jun', revenue: 3200 },
+  { month: 'Jul', revenue: 3500 },
+  { month: 'Aug', revenue: 3700 },
+  { month: 'Sep', revenue: 2500 },
+  { month: 'Oct', revenue: 2800 },
+  { month: 'Nov', revenue: 3000 },
+  { month: 'Dec', revenue: 4800 },
+];
 
-    // console.log('Fetching revenue data...');
-    // await new Promise((resolve) => setTimeout(resolve, 3000));
+const customers = [
+  { id: 'd6e15727-9fe1-4961-8c5b-ea44a9bd81aa', name: 'Evil Rabbit',       email: 'evil@rabbit.com',    image_url: '/customers/evil-rabbit.png'       },
+  { id: '3958dc9e-712f-4377-85e9-fec4b6a6442a', name: 'Delba de Oliveira', email: 'delba@oliveira.com', image_url: '/customers/delba-de-oliveira.png'  },
+  { id: '3958dc9e-742f-4377-85e9-fec4b6a6442a', name: 'Lee Robinson',      email: 'lee@robinson.com',   image_url: '/customers/lee-robinson.png'       },
+  { id: '76d65c26-f784-44a2-ac19-586678f7c2f2', name: 'Michael Novotny',   email: 'michael@novotny.com',image_url: '/customers/michael-novotny.png'    },
+  { id: 'cc27c14a-0acf-4f4a-a6c9-d45682c144b9', name: 'Amy Burns',         email: 'amy@burns.com',      image_url: '/customers/amy-burns.png'          },
+  { id: '13d07535-c59e-4157-a011-f8d2ef4e0cbb', name: 'Balazs Orban',      email: 'balazs@orban.com',   image_url: '/customers/balazs-orban.png'       },
+];
 
-    const data = await sql<Revenue[]>`SELECT * FROM revenue`;
+// Amounts are in cents (e.g. 15795 = $157.95)
+const invoices = [
+  { id: 'a1b2c3d4-0001-0001-0001-000000000001', customer_id: 'd6e15727-9fe1-4961-8c5b-ea44a9bd81aa', amount: 15795, status: 'pending' as const, date: '2022-12-06' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000002', customer_id: '3958dc9e-712f-4377-85e9-fec4b6a6442a', amount: 20348, status: 'pending' as const, date: '2022-11-14' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000003', customer_id: 'cc27c14a-0acf-4f4a-a6c9-d45682c144b9', amount:  3040, status: 'paid'    as const, date: '2022-10-29' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000004', customer_id: '76d65c26-f784-44a2-ac19-586678f7c2f2', amount: 44800, status: 'paid'    as const, date: '2023-09-10' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000005', customer_id: '13d07535-c59e-4157-a011-f8d2ef4e0cbb', amount: 34577, status: 'pending' as const, date: '2023-08-05' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000006', customer_id: '3958dc9e-742f-4377-85e9-fec4b6a6442a', amount: 54246, status: 'pending' as const, date: '2023-07-16' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000007', customer_id: 'd6e15727-9fe1-4961-8c5b-ea44a9bd81aa', amount:   666, status: 'pending' as const, date: '2023-06-27' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000008', customer_id: '76d65c26-f784-44a2-ac19-586678f7c2f2', amount: 32545, status: 'paid'    as const, date: '2023-06-09' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000009', customer_id: 'cc27c14a-0acf-4f4a-a6c9-d45682c144b9', amount:  1250, status: 'paid'    as const, date: '2023-06-17' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000010', customer_id: '13d07535-c59e-4157-a011-f8d2ef4e0cbb', amount:  8546, status: 'paid'    as const, date: '2023-06-07' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000011', customer_id: '3958dc9e-712f-4377-85e9-fec4b6a6442a', amount:   500, status: 'paid'    as const, date: '2023-08-19' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000012', customer_id: '13d07535-c59e-4157-a011-f8d2ef4e0cbb', amount:  8945, status: 'paid'    as const, date: '2023-06-03' },
+  { id: 'a1b2c3d4-0001-0001-0001-000000000013', customer_id: '3958dc9e-742f-4377-85e9-fec4b6a6442a', amount:  1000, status: 'paid'    as const, date: '2022-06-05' },
+];
 
-    // console.log('Data fetch completed after 3 seconds.');
+// ---------------------------------------------------------------------------
+// Exported fetch functions
+// ---------------------------------------------------------------------------
 
-    return data;
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch revenue data.');
-  }
+export async function fetchRevenue(): Promise<Revenue[]> {
+  return revenue;
 }
 
-export async function fetchLatestInvoices() {
-  try {
-    const data = await sql<LatestInvoiceRaw[]>`
-      SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
-      ORDER BY invoices.date DESC
-      LIMIT 5`;
-
-    const latestInvoices = data.map((invoice) => ({
-      ...invoice,
-      amount: formatCurrency(invoice.amount),
-    }));
-    return latestInvoices;
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch the latest invoices.');
-  }
+export async function fetchLatestInvoices(): Promise<LatestInvoice[]> {
+  return invoices
+    .slice()
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .slice(0, 5)
+    .map((inv) => {
+      const c = customers.find((c) => c.id === inv.customer_id)!;
+      return {
+        id: inv.id,
+        name: c.name,
+        image_url: c.image_url,
+        email: c.email,
+        amount: formatCurrency(inv.amount),
+      };
+    });
 }
 
 export async function fetchCardData() {
-  try {
-    // You can probably combine these into a single SQL query
-    // However, we are intentionally splitting them to demonstrate
-    // how to initialize multiple queries in parallel with JS.
-    const invoiceCountPromise = sql`SELECT COUNT(*) FROM invoices`;
-    const customerCountPromise = sql`SELECT COUNT(*) FROM customers`;
-    const invoiceStatusPromise = sql`SELECT
-         SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS "paid",
-         SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) AS "pending"
-         FROM invoices`;
-
-    const data = await Promise.all([
-      invoiceCountPromise,
-      customerCountPromise,
-      invoiceStatusPromise,
-    ]);
-
-    const numberOfInvoices = Number(data[0][0].count ?? '0');
-    const numberOfCustomers = Number(data[1][0].count ?? '0');
-    const totalPaidInvoices = formatCurrency(data[2][0].paid ?? '0');
-    const totalPendingInvoices = formatCurrency(data[2][0].pending ?? '0');
-
-    return {
-      numberOfCustomers,
-      numberOfInvoices,
-      totalPaidInvoices,
-      totalPendingInvoices,
-    };
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch card data.');
-  }
+  return {
+    numberOfInvoices: invoices.length,
+    numberOfCustomers: customers.length,
+    totalPaidInvoices: formatCurrency(
+      invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + i.amount, 0),
+    ),
+    totalPendingInvoices: formatCurrency(
+      invoices.filter((i) => i.status === 'pending').reduce((s, i) => s + i.amount, 0),
+    ),
+  };
 }
 
 const ITEMS_PER_PAGE = 6;
+
 export async function fetchFilteredInvoices(
   query: string,
   currentPage: number,
-) {
+): Promise<InvoicesTable[]> {
+  const q = query.toLowerCase();
   const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
-  try {
-    const invoices = await sql<InvoicesTable[]>`
-      SELECT
-        invoices.id,
-        invoices.amount,
-        invoices.date,
-        invoices.status,
-        customers.name,
-        customers.email,
-        customers.image_url
-      FROM invoices
-      JOIN customers ON invoices.customer_id = customers.id
-      WHERE
-        customers.name ILIKE ${`%${query}%`} OR
-        customers.email ILIKE ${`%${query}%`} OR
-        invoices.amount::text ILIKE ${`%${query}%`} OR
-        invoices.date::text ILIKE ${`%${query}%`} OR
-        invoices.status ILIKE ${`%${query}%`}
-      ORDER BY invoices.date DESC
-      LIMIT ${ITEMS_PER_PAGE} OFFSET ${offset}
-    `;
-
-    return invoices;
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch invoices.');
-  }
+  return invoices
+    .slice()
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .filter((inv) => {
+      const c = customers.find((c) => c.id === inv.customer_id)!;
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q) ||
+        String(inv.amount).includes(q) ||
+        inv.date.includes(q) ||
+        inv.status.includes(q)
+      );
+    })
+    .slice(offset, offset + ITEMS_PER_PAGE)
+    .map((inv) => {
+      const c = customers.find((c) => c.id === inv.customer_id)!;
+      return {
+        id: inv.id,
+        customer_id: inv.customer_id,
+        name: c.name,
+        email: c.email,
+        image_url: c.image_url,
+        date: inv.date,
+        amount: inv.amount,
+        status: inv.status,
+      };
+    });
 }
 
-export async function fetchInvoicesPages(query: string) {
-  try {
-    const data = await sql`SELECT COUNT(*)
-    FROM invoices
-    JOIN customers ON invoices.customer_id = customers.id
-    WHERE
-      customers.name ILIKE ${`%${query}%`} OR
-      customers.email ILIKE ${`%${query}%`} OR
-      invoices.amount::text ILIKE ${`%${query}%`} OR
-      invoices.date::text ILIKE ${`%${query}%`} OR
-      invoices.status ILIKE ${`%${query}%`}
-  `;
+export async function fetchInvoicesPages(query: string): Promise<number> {
+  const q = query.toLowerCase();
+  const count = invoices.filter((inv) => {
+    const c = customers.find((c) => c.id === inv.customer_id)!;
+    return (
+      c.name.toLowerCase().includes(q) ||
+      c.email.toLowerCase().includes(q) ||
+      String(inv.amount).includes(q) ||
+      inv.date.includes(q) ||
+      inv.status.includes(q)
+    );
+  }).length;
 
-    const totalPages = Math.ceil(Number(data[0].count) / ITEMS_PER_PAGE);
-    return totalPages;
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch total number of invoices.');
-  }
+  return Math.ceil(count / ITEMS_PER_PAGE);
 }
 
-export async function fetchInvoiceById(id: string) {
-  try {
-    const data = await sql<InvoiceForm[]>`
-      SELECT
-        invoices.id,
-        invoices.customer_id,
-        invoices.amount,
-        invoices.status
-      FROM invoices
-      WHERE invoices.id = ${id};
-    `;
-
-    const invoice = data.map((invoice) => ({
-      ...invoice,
-      // Convert amount from cents to dollars
-      amount: invoice.amount / 100,
-    }));
-
-    return invoice[0];
-  } catch (error) {
-    console.error('Database Error:', error);
-    throw new Error('Failed to fetch invoice.');
-  }
+export async function fetchInvoiceById(id: string): Promise<InvoiceForm | undefined> {
+  const inv = invoices.find((i) => i.id === id);
+  if (!inv) return undefined;
+  return {
+    id: inv.id,
+    customer_id: inv.customer_id,
+    amount: inv.amount / 100,
+    status: inv.status,
+  };
 }
 
-export async function fetchCustomers() {
-  try {
-    const customers = await sql<CustomerField[]>`
-      SELECT
-        id,
-        name
-      FROM customers
-      ORDER BY name ASC
-    `;
-
-    return customers;
-  } catch (err) {
-    console.error('Database Error:', err);
-    throw new Error('Failed to fetch all customers.');
-  }
+export async function fetchCustomers(): Promise<CustomerField[]> {
+  return customers
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(({ id, name }) => ({ id, name }));
 }
 
 export async function fetchFilteredCustomers(query: string) {
-  try {
-    const data = await sql<CustomersTableType[]>`
-		SELECT
-		  customers.id,
-		  customers.name,
-		  customers.email,
-		  customers.image_url,
-		  COUNT(invoices.id) AS total_invoices,
-		  SUM(CASE WHEN invoices.status = 'pending' THEN invoices.amount ELSE 0 END) AS total_pending,
-		  SUM(CASE WHEN invoices.status = 'paid' THEN invoices.amount ELSE 0 END) AS total_paid
-		FROM customers
-		LEFT JOIN invoices ON customers.id = invoices.customer_id
-		WHERE
-		  customers.name ILIKE ${`%${query}%`} OR
-        customers.email ILIKE ${`%${query}%`}
-		GROUP BY customers.id, customers.name, customers.email, customers.image_url
-		ORDER BY customers.name ASC
-	  `;
+  const q = query.toLowerCase();
 
-    const customers = data.map((customer) => ({
-      ...customer,
-      total_pending: formatCurrency(customer.total_pending),
-      total_paid: formatCurrency(customer.total_paid),
-    }));
-
-    return customers;
-  } catch (err) {
-    console.error('Database Error:', err);
-    throw new Error('Failed to fetch customer table.');
-  }
+  return customers
+    .filter((c) => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((c) => {
+      const custInvoices = invoices.filter((i) => i.customer_id === c.id);
+      return {
+        id: c.id,
+        name: c.name,
+        email: c.email,
+        image_url: c.image_url,
+        total_invoices: custInvoices.length,
+        total_pending: formatCurrency(custInvoices.filter((i) => i.status === 'pending').reduce((s, i) => s + i.amount, 0)),
+        total_paid:    formatCurrency(custInvoices.filter((i) => i.status === 'paid').reduce((s, i) => s + i.amount, 0)),
+      };
+    });
 }
